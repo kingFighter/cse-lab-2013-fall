@@ -98,7 +98,21 @@ inode_manager::alloc_inode(uint32_t type)
    * note: the normal inode block should begin from the 2nd inode block.
    * the 1st is used for root_dir, see inode_manager::inode_manager().
    */
-  return 1;
+  uint32_t inum;
+  struct inode *ino = NULL;
+  char buf[BLOCK_SIZE];
+  for(inum = 1; inum < (bm->sb).ninodes; inum++) { // what about inum == 0?
+    bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
+    ino = (struct inode*)buf + inum % IPB;
+    if (ino->type == 0) { //a free inode 
+      memset(ino, 0, sizeof(*ino));
+      ino->type = type;	// how about create time etc.?
+      bm->write_block(IBLOCK(inum, bm->sb.nblocks), buf);
+      return inum;
+    }
+  }
+  printf("error! exceed max inode number.\n");
+  return 0;
 }
 
 void
@@ -198,7 +212,12 @@ inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
    * note: get the attributes of inode inum.
    * you can refer to "struct attr" in extent_protocol.h
    */
-  
+  struct inode *ino = get_inode(inum);
+  a.type = ino->type;
+  a.atime = ino->atime;
+  a.mtime = ino->mtime;
+  a.ctime = ino->ctime;
+  a.size = ino->size;
   return;
 }
 
