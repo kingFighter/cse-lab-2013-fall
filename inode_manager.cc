@@ -10,7 +10,7 @@ disk::disk()
 void
 disk::read_block(blockid_t id, char *buf)
 {
-  if (id < 0 || id > BLOCK_NUM || buf == NULL)
+  if (id < 0 || id >= BLOCK_NUM || buf == NULL)
     return;
 
   memcpy(buf, blocks[id], BLOCK_SIZE);
@@ -19,7 +19,7 @@ disk::read_block(blockid_t id, char *buf)
 void
 disk::write_block(blockid_t id, const char *buf)
 {
-  if (id < 0 || id > BLOCK_NUM || buf == NULL)
+  if (id < 0 || id >= BLOCK_NUM || buf == NULL)
     return;
 
   memcpy(blocks[id], buf, BLOCK_SIZE);
@@ -52,7 +52,7 @@ block_manager::free_block(uint32_t id)
 }
 
 // The layout of disk should be like this:
-// |<-sb->|<-inode table->|<-free block bitmap->|<-data->|
+// |<-sb->|<-free block bitmap->|<-inode table->|<-data->|
 block_manager::block_manager()
 {
   d = new disk();
@@ -94,7 +94,7 @@ uint32_t
 inode_manager::alloc_inode(uint32_t type)
 {
   /* 
-   * your lab1 code gose here.
+   * your lab1 code goes here.
    * note: the normal inode block should begin from the 2nd inode block.
    * the 1st is used for root_dir, see inode_manager::inode_manager().
    */
@@ -105,7 +105,7 @@ void
 inode_manager::free_inode(uint32_t inum)
 {
   /* 
-   * your lab1 code gose here.
+   * your lab1 code goes here.
    * note: you need to check if the inode is already a freed one;
    * if not, clear it, and remember to write back to disk.
    */
@@ -129,7 +129,7 @@ inode_manager::get_inode(uint32_t inum)
     return NULL;
   }
 
-  bm->read_block(IBLOCK(inum), buf);
+  bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
   // printf("%s:%d\n", __FILE__, __LINE__);
 
   ino_disk = (struct inode*)buf + inum%IPB;
@@ -154,10 +154,10 @@ inode_manager::put_inode(uint32_t inum, struct inode *ino)
   if (ino == NULL)
     return;
 
-  bm->read_block(IBLOCK(inum), buf);
+  bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
   ino_disk = (struct inode*)buf + inum%IPB;
   *ino_disk = *ino;
-  bm->write_block(IBLOCK(inum), buf);
+  bm->write_block(IBLOCK(inum, bm->sb.nblocks), buf);
 }
 
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
@@ -194,7 +194,7 @@ void
 inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
 {
   /*
-   * your lab1 code gose here.
+   * your lab1 code goes here.
    * note: get the attributes of inode inum.
    * you can refer to "struct attr" in extent_protocol.h
    */
@@ -206,7 +206,7 @@ void
 inode_manager::remove_file(uint32_t inum)
 {
   /*
-   * your lab1 code gose here
+   * your lab1 code goes here
    * note: you need to consider about both the data block and inode of the file
    */
   

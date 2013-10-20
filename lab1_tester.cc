@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #define FILE_NUM 50
+#define LARGE_FILE_SIZE 512*64
 
 #define iprint(msg) \
     printf("[TEST_ERROR]: %s\n", msg);
@@ -60,6 +61,60 @@ int test_create_and_getattr()
     return 0;
 }
 
+int test_indirect()
+{
+    int i, rnum;
+    char *temp1 = (char *)malloc(LARGE_FILE_SIZE);
+    char *temp2 = (char *)malloc(LARGE_FILE_SIZE);
+    extent_protocol::extentid_t id1, id2;
+    printf("begin test indirect\n");
+    srand((unsigned)time(NULL));
+    
+    ec->create(extent_protocol::T_FILE, id1);
+    for (i = 0; i < LARGE_FILE_SIZE; i++) {
+        rnum = rand() % 26;
+        temp1[i] = 97 + rnum;
+    }
+    std::string buf(temp1);
+    if (ec->put(id1, buf) != extent_protocol::OK) {
+        printf("error put, return not OK\n");
+        return 1;
+    }
+    ec->create(extent_protocol::T_FILE, id2);
+    for (i = 0; i < LARGE_FILE_SIZE; i++) {
+        rnum = rand() % 26;
+        temp2[i] = 97 + rnum;
+    }
+    std::string buf2(temp2);
+    if (ec->put(id2, buf2) != extent_protocol::OK) {
+        printf("error put, return not OK\n");
+        return 2;
+    }
+    std::string buf_2;
+    if (ec->get(id1, buf_2) != extent_protocol::OK) {
+        printf("error get, return not OK\n");
+        return 3;
+    }
+    if (buf.compare(buf_2) != 0) {
+        std::cout << "error get large file, not consistent with put large file : " << 
+            buf << " <-> " << buf_2 << "\n";
+        return 4;
+    }
+    std::string buf2_2;
+    if (ec->get(id2, buf2_2) != extent_protocol::OK) {
+        printf("error get, return not OK\n");
+        return 5;
+    }
+    if (buf2.compare(buf2_2) != 0) {
+        std::cout << "error get large file 2, not consistent with put large file : " << 
+            buf2 << " <-> " << buf2_2 << "\n";
+        return 6;
+    }
+
+    total_score += 10;
+    printf("end test indirect\n");
+    return 0;
+}
 
 int test_put_and_get()
 {
@@ -114,8 +169,8 @@ int test_put_and_get()
         }
     } 
 
-
-    total_score += 40; 
+    total_score += 30;
+    test_indirect(); 
     printf("========== pass test put and get ==========\n");
     return 0;
 }

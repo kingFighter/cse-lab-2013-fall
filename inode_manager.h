@@ -54,16 +54,16 @@ class block_manager {
 #define IPB           (BLOCK_SIZE / sizeof(struct inode))
 
 // Block containing inode i
-#define IBLOCK(i)     ((i) / IPB + 2)
+#define IBLOCK(i, nblocks)     ((nblocks)/BPB + (i)/IPB + 3)
 
 // Bitmap bits per block
 #define BPB           (BLOCK_SIZE*8)
 
 // Block containing bit for block b
-#define BBLOCK(b, ninodes) (b/BPB + (ninodes)/IPB + 3)
+#define BBLOCK(b) ((b)/BPB + 2)
 
 #define NDIRECT 32
-#define NINDIRECT (BSIZE / sizeof(uint))
+#define NINDIRECT (BLOCK_SIZE / sizeof(uint))
 #define MAXFILE (NDIRECT + NINDIRECT)
 
 typedef struct inode {
