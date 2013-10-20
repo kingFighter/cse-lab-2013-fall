@@ -99,15 +99,11 @@ inode_manager::alloc_inode(uint32_t type)
    * the 1st is used for root_dir, see inode_manager::inode_manager().
    */
   uint32_t inum;
-  struct inode *ino = NULL;
-  char buf[BLOCK_SIZE];
   for(inum = 1; inum < (bm->sb).ninodes; inum++) { // what about inum == 0?
-    bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
-    ino = (struct inode*)buf + inum % IPB;
-    if (ino->type == 0) { //a free inode 
-      memset(ino, 0, sizeof(*ino));
-      ino->type = type;	// how about create time etc.?
-      bm->write_block(IBLOCK(inum, bm->sb.nblocks), buf);
+    if (get_inode(inum) == NULL) {
+      struct inode ino;
+      ino.type = type;	// how about create time etc.?
+      put_inode(inum, &ino);
       return inum;
     }
   }
