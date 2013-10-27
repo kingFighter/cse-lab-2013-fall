@@ -1,4 +1,4 @@
-LAB=1
+LAB=2
 SOL=0
 RPC=./rpc
 LAB1GE=$(shell expr $(LAB) \>\= 1)
@@ -9,6 +9,7 @@ LAB5GE=$(shell expr $(LAB) \>\= 5)
 LAB6GE=$(shell expr $(LAB) \>\= 6)
 LAB7GE=$(shell expr $(LAB) \>\= 7)
 CXXFLAGS =  -g -MMD -Wall -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64
+FUSEFLAGS= -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=25 -I/usr/local/include/fuse -I/usr/include/fuse
 
 ifeq ($(shell uname -s),Darwin)
   MACFLAGS= -D__FreeBSD__=10
@@ -17,7 +18,17 @@ else
 endif
 LDFLAGS = -L. -L/usr/local/lib
 LDLIBS = -lpthread 
-
+ifeq ($(LAB1GE),1)
+  ifeq ($(shell uname -s),Darwin)
+    ifeq ($(shell sw_vers -productVersion | sed -e "s/.*\(10\.[0-9]\).*/\1/"),10.6)
+      LDLIBS += -lfuse_ino64
+    else
+      LDLIBS += -lfuse
+    endif
+  else
+    LDLIBS += -lfuse
+  endif
+endif
 LDLIBS += $(shell test -f `gcc -print-file-name=librt.so` && echo -lrt)
 LDLIBS += $(shell test -f `gcc -print-file-name=libdl.so` && echo -ldl)
 CC = g++
@@ -125,5 +136,5 @@ handin_file=lab$(LAB).tgz
 labdir=$(shell basename $(PWD))
 handin: 
 	@bash -c "cd ../; tar -X <(tr ' ' '\n' < <(echo '$(handin_ignore)')) -czvf $(handin_file) $(labdir); mv $(handin_file) $(labdir); cd $(labdir)"
-	@echo Please modify lab1.tgz to lab1_[your student id].tgz and upload it to ftp://ytliu.cc:public@public.sjtu.edu.cn/upload/	
+	@echo Please modify lab2.tgz to lab1_[your student id].tgz and upload it to ftp://ytliu.cc:public@public.sjtu.edu.cn/upload/	
 	@echo Thanks!
