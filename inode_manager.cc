@@ -133,6 +133,12 @@ inode_manager::free_inode(uint32_t inum)
    * note: you need to check if the inode is already a freed one;
    * if not, clear it, and remember to write back to disk.
    */
+  struct inode *ino = get_inode(inum);
+  if (ino->type != 0) {
+    ino->type = 0;
+    put_inode(inum, ino);
+    delete ino;
+  }
 
   return;
 }
