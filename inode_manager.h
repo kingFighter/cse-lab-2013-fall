@@ -36,6 +36,7 @@ class block_manager {
  private:
   disk *d;
   std::map <uint32_t, int> using_blocks;
+  bool *bit_map;
  public:
   block_manager();
   struct superblock sb;
