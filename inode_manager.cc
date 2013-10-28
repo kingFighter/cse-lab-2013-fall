@@ -37,6 +37,7 @@ block_manager::alloc_block()
    * you need to think about which block you can start to be allocated.
    */
   blockid_t id = IBLOCK(sb.ninodes, sb.nblocks);
+  // char *bit_map = (char *)malloc(sizeof(char) * sb.nblocks / 8); //We are sure sb.nblocks % 8== 0
   for (; id < sb.nblocks; id++)
     if (!bit_map[id]) {
       bit_map[id] = true;
@@ -87,6 +88,7 @@ block_manager::write_block(uint32_t id, const char *buf)
 }
 
 // inode layer -----------------------------------------
+#define GET_BLOCK_NUM(size,block_size) ((size % block_size == 0)? size / block_size : size / block_size + 1)
 
 inode_manager::inode_manager()
 {
@@ -119,6 +121,7 @@ inode_manager::alloc_inode(uint32_t type)
       return inum;
     } else {
       delete ino;
+      ino = NULL;
     }
   }
   printf("error! exceed max inode number.\n");
@@ -134,13 +137,17 @@ inode_manager::free_inode(uint32_t inum)
    * if not, clear it, and remember to write back to disk.
    */
   struct inode *ino = get_inode(inum);
-  if (ino->type != 0) {
+  if (ino != NULL) {
+    blockid_t limit = GET_BLOCK_NUM(ino->size, (bm->sb).nblocks);
+    blockid_t id = 0;
+    for (; id < limit; id++)
+      bm->free_block(ino->blocks[id]);
     ino->type = 0;
+    ino->size = 0;
     put_inode(inum, ino);
+    
     delete ino;
   }
-
-  return;
 }
 
 
@@ -202,16 +209,11 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
    * note: read blocks related to inode number inum,
    * and copy them to buf_Out
    */
-  if (inum < 0 || inum >= INODE_NUM) {
-    printf("\tim: inum out of range\n");
-    return;//panic or exit?
-  }
   struct inode *ino = get_inode(inum);
+  if (ino == NULL) return;
 
-  uint32_t block_num = (ino->size % BLOCK_SIZE == 0)? ino->size / BLOCK_SIZE : ino->size / BLOCK_SIZE + 1;
-
+  uint32_t block_num = GET_BLOCK_NUM(ino->size, BLOCK_SIZE);
   *buf_out = (char *)malloc(sizeof(char) * block_num * BLOCK_SIZE);
-
   *size = ino->size;
   uint32_t i = 0;
 
@@ -244,40 +246,59 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
    * you need to consider the situation when the size of buf 
    * is larger or smaller than the size of original inode
    */
-  if (inum < 0 || inum >= INODE_NUM) {
-    printf("\tim: inum out of range\n");
-    return;//panic or exit?
-  }
   struct inode *ino = get_inode(inum);
+  if (ino == NULL) return;
+
   int offset = 0;
-  uint32_t original_block = (ino->size % BLOCK_SIZE == 0)? ino->size / BLOCK_SIZE : ino->size / BLOCK_SIZE + 1;
-  uint32_t block_num = (size % BLOCK_SIZE == 0)? size / BLOCK_SIZE : size / BLOCK_SIZE + 1;
+  uint32_t original_block = GET_BLOCK_NUM(ino->size, BLOCK_SIZE);
+  uint32_t block_num = GET_BLOCK_NUM(size, BLOCK_SIZE);
   if (block_num > MAXFILE) {
     printf("\tim: error! file is too large 1\n");
     return; //panic or exit?
   }
+
   uint32_t limit;
   uint32_t i;
-  blockid_t *indirect_blocks;
+  blockid_t *indirect_blocks = NULL;
+  // alloc/free blocks as needed
   if (original_block < block_num) {
     limit =MIN(block_num, NDIRECT);
     for (i = 0; i < limit - original_block; i++)
       ino->blocks[original_block + i] = bm->alloc_block();
-    if (original_block <= NDIRECT && block_num > NDIRECT) {
-      ino->blocks[NDIRECT] =  bm->alloc_block();
+
+    if (block_num > NDIRECT) {
+      limit = block_num - NDIRECT;
       indirect_blocks = (blockid_t *)malloc(sizeof(blockid_t) * NINDIRECT);
-      for (i = 0; i <block_num - NDIRECT; i++)
+
+      if (original_block <= NDIRECT) {
+	ino->blocks[NDIRECT] =  bm->alloc_block();
+	i = 0;
+      } else {
+	i = original_block - NDIRECT;
+	bm->read_block(ino->blocks[NDIRECT], (char *)indirect_blocks);
+      }
+      
+      for (; i < limit; i++)
 	indirect_blocks[i] = bm->alloc_block();
       bm->write_block(ino->blocks[NDIRECT], (char *)indirect_blocks);
       delete []indirect_blocks;
+      indirect_blocks = NULL;
     }
   } else {
-    for (i = 0; i < original_block - block_num; i++) 
+    limit = MIN(original_block, NDIRECT);
+    for (i = 0; i < limit - block_num; i++) 
       bm->free_block(block_num + i);
-    if (original_block > NDIRECT && block_num <= NDIRECT) {
+    if (original_block > NDIRECT) {
       indirect_blocks = (blockid_t *)malloc(sizeof(blockid_t) * NINDIRECT);
       bm->read_block(ino->blocks[NDIRECT], (char *)indirect_blocks);
-      for (i = 0; i < original_block - NINDIRECT; i++)
+      limit = original_block - NDIRECT;
+      if (block_num > NDIRECT) {
+	i = block_num - NDIRECT;
+      } else {
+	i = 0;
+	bm->free_block(ino->blocks[NDIRECT]);
+      }
+      for (; i < limit; i++)
 	bm->free_block(indirect_blocks[i]);
       delete []indirect_blocks;
     }
@@ -314,14 +335,16 @@ inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
   struct inode *ino = get_inode(inum);
   if (ino == NULL) {
     a.type = 0;
-    return;
+    a.size = 0;
+  } else {
+    a.type = ino->type;
+    a.atime = ino->atime;
+    a.mtime = ino->mtime;
+    a.ctime = ino->ctime;
+    a.size = ino->size;
+    delete ino;
+    ino = NULL;
   }
-  a.type = ino->type;
-  a.atime = ino->atime;
-  a.mtime = ino->mtime;
-  a.ctime = ino->ctime;
-  a.size = ino->size;
-  delete ino;
 }
 
 void
