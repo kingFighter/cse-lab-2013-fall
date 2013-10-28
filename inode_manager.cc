@@ -26,6 +26,7 @@ disk::write_block(blockid_t id, const char *buf)
 }
 
 // block layer -----------------------------------------
+#define CEIL(a, b) ((a % b == 0)? a / b : a / b + 1)
 
 // Allocate a free disk block.
 blockid_t
@@ -36,14 +37,29 @@ block_manager::alloc_block()
    * note: you should mark the corresponding bit in block bitmap when alloc.
    * you need to think about which block you can start to be allocated.
    */
-  blockid_t id = IBLOCK(sb.ninodes, sb.nblocks);
-  // char *bit_map = (char *)malloc(sizeof(char) * sb.nblocks / 8); //We are sure sb.nblocks % 8== 0
-  for (; id < sb.nblocks; id++)
-    if (!bit_map[id]) {
-      bit_map[id] = true;
-      return id;
-    }
+  blockid_t id = IBLOCK(sb.ninodes, sb.nblocks);//first data block
+  uint8_t *bit_map = (uint8_t *)malloc(sizeof(uint8_t) * BLOCK_SIZE);
+  uint32_t i = BBLOCK(id); // pass boot sector and super block
+  uint32_t limit = BBLOCK(sb.nblocks);
+  uint32_t j = id % BPB;
 
+  for (; i < limit; i++) {
+    read_block(i, (char *)bit_map);
+    for (; j < BPB; j++) {
+      uint8_t id_2 = j / 8;
+      uint8_t b = bit_map[id_2];
+      uint8_t id_3 = j % 8;
+      bool not_free = (b << id_3) & 0x80;
+      if (!not_free) {
+	bit_map[id_2] = (1 << (7 - id_3)) | b;
+	write_block(i, (char *)bit_map);
+	delete []bit_map;
+	return (i - 2) * BPB + j;
+      }
+    }
+    j = 0;
+  }
+  delete []bit_map;
   return 0;
 }
 
@@ -54,7 +70,16 @@ block_manager::free_block(uint32_t id)
    * your lab1 code goes here.
    * note: you should unmark the corresponding bit in the block bitmap when free.
    */
-  bit_map[id] = false;
+  uint8_t *bit_map = (uint8_t *)malloc(sizeof(uint8_t) * BLOCK_SIZE);
+  blockid_t i = BBLOCK(id);
+  read_block(i, (char *)bit_map);
+  uint8_t j = id % BPB;
+  uint8_t id_2 = j / 8;
+  uint8_t b = bit_map[id_2];
+  uint8_t id_3 = j % 8;
+  bit_map[id_2] = (~(1 << (7 - id_3))) && b;
+  write_block(i, (char *)bit_map);
+  delete []bit_map;
   return;
 }
 
@@ -68,11 +93,6 @@ block_manager::block_manager()
   sb.size = BLOCK_SIZE * BLOCK_NUM;
   sb.nblocks = BLOCK_NUM;
   sb.ninodes = INODE_NUM;
-  bit_map = new bool[sb.nblocks];
-  uint32_t i = 0;
-
-  for (; i < sb.nblocks; i++)
-    bit_map[i] = false;
 }
 
 void
@@ -88,7 +108,6 @@ block_manager::write_block(uint32_t id, const char *buf)
 }
 
 // inode layer -----------------------------------------
-#define GET_BLOCK_NUM(size,block_size) ((size % block_size == 0)? size / block_size : size / block_size + 1)
 
 inode_manager::inode_manager()
 {
@@ -137,15 +156,13 @@ inode_manager::free_inode(uint32_t inum)
    * if not, clear it, and remember to write back to disk.
    */
   struct inode *ino = get_inode(inum);
+  // Why I don't free data blocks?
+  // I think one function do one things, and remove_file should do this job
   if (ino != NULL) {
-    blockid_t limit = GET_BLOCK_NUM(ino->size, (bm->sb).nblocks);
-    blockid_t id = 0;
-    for (; id < limit; id++)
-      bm->free_block(ino->blocks[id]);
     ino->type = 0;
     ino->size = 0;
     put_inode(inum, ino);
-    
+
     delete ino;
   }
 }
@@ -212,7 +229,7 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
   struct inode *ino = get_inode(inum);
   if (ino == NULL) return;
 
-  uint32_t block_num = GET_BLOCK_NUM(ino->size, BLOCK_SIZE);
+  uint32_t block_num = CEIL(ino->size, BLOCK_SIZE);
   *buf_out = (char *)malloc(sizeof(char) * block_num * BLOCK_SIZE);
   *size = ino->size;
   uint32_t i = 0;
@@ -224,8 +241,10 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
     offset += BLOCK_SIZE;
   }
 
-  if (block_num <= NDIRECT)
+  if (block_num <= NDIRECT) {
+    delete ino;
     return;
+  }
   blockid_t *indirect_blocks = (blockid_t *)malloc(sizeof(blockid_t) * NINDIRECT);
   bm->read_block(ino->blocks[NDIRECT], (char *)indirect_blocks);
   for (i = 0; i < block_num - limit; i++) {
@@ -250,8 +269,8 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
   if (ino == NULL) return;
 
   int offset = 0;
-  uint32_t original_block = GET_BLOCK_NUM(ino->size, BLOCK_SIZE);
-  uint32_t block_num = GET_BLOCK_NUM(size, BLOCK_SIZE);
+  uint32_t original_block = CEIL(ino->size, BLOCK_SIZE);
+  uint32_t block_num = CEIL(size, BLOCK_SIZE);
   if (block_num > MAXFILE) {
     printf("\tim: error! file is too large 1\n");
     return; //panic or exit?
@@ -301,6 +320,7 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
       for (; i < limit; i++)
 	bm->free_block(indirect_blocks[i]);
       delete []indirect_blocks;
+      indirect_blocks = NULL;
     }
   }
 
@@ -312,8 +332,11 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
     offset += BLOCK_SIZE;
   }
 
-  if (block_num <= NDIRECT)
+  if (block_num <= NDIRECT) {
+    delete ino;
     return;
+  }
+
   indirect_blocks = (blockid_t *)malloc(sizeof(blockid_t) * NINDIRECT);
   bm->read_block(ino->blocks[NDIRECT], (char *)indirect_blocks);
   for (i = 0; i < block_num - limit; i++) { 
@@ -356,20 +379,20 @@ inode_manager::remove_file(uint32_t inum)
    */
   struct inode *ino = get_inode(inum);
   if (ino == NULL) return;
-  uint32_t original_block = (ino->size % BLOCK_SIZE == 0)? ino->size / BLOCK_SIZE : ino->size / BLOCK_SIZE + 1;
+  uint32_t original_block = CEIL(ino->size, BLOCK_SIZE);
   uint32_t limit = MIN(original_block, NDIRECT);
   uint32_t id;
   for (id = 0; id <limit; id++)
     bm->free_block(id);
+
   if (original_block > NDIRECT) {
     blockid_t *indirect_blocks = (blockid_t *)malloc(sizeof(blockid_t) * NINDIRECT);
     bm->read_block(ino->blocks[NDIRECT], (char *)indirect_blocks);
     for (id = 0; id < original_block - limit; id++)
       bm->free_block(indirect_blocks[id]);
     delete [] indirect_blocks;
+    indirect_blocks = NULL;
   }
-  ino->size = 0;
-  ino->type = 0;
-  put_inode(inum, ino);
+  free_inode(inum);
   delete ino;
 }
