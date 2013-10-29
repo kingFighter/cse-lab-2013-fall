@@ -277,7 +277,7 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
      * note: you should use yfs->lookup;
      * remember to return e using fuse_reply_entry.
      */
-
+    fuse_reply_entry(req, &e);
 }
 
 
