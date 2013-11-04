@@ -300,10 +300,22 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
      * note: you should use yfs->lookup;
      * remember to return e using fuse_reply_entry.
      */
-    if (found)
-        fuse_reply_entry(req, &e);
-    else
+    yfs_client::inum parent_inum = parent, ino_out;
+    struct stat st;
+    yfs_client::status ret;
+    yfs->lookup(parent_inum, name, found, ino_out); // Need determine return value?
+    if (found) {
+      ret = getattr(ino_out, st);
+      if (ret != yfs_client::OK) {
         fuse_reply_err(req, ENOENT);
+        return;
+      }
+      e.ino = ino_out;
+      e.attr = st;
+      fuse_reply_entry(req, &e);
+    }
+    else
+      fuse_reply_err(req, ENOENT);
 
 }
 
