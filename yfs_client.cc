@@ -152,7 +152,22 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
      * note: lookup file from parent dir according to name;
      * you should design the format of directory content.
      */
+    // directory format *name:inum;*
+    std::string content, inum_str;
+    if (ec->get(parent, content) != extent_protocol::OK) {
+      printf("yfs_client.cc:lookup error get, return not OK\n");
+      return RPCERR;		// ??what to return?
+    }
+    std::string::size_type position = content.find(name), position1, position2;
+    if (position == content.npos) {
+      printf("yfs_client.cc:lookup file not exist.\n");
+      return NOENT;		// what is NOENT??
+    }
+    position1 = content.find(":", position);
+    position2 = content.find(";", position);
 
+    inum_str = content.substr(position1 + 1, position2);
+    sscanf(inum_str.c_str(), "%lld", &ino_out); // or ostringstream?
     return r;
 }
 
