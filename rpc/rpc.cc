@@ -662,48 +662,8 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 {
     ScopedLock rwl(&reply_window_m_);
 
-    // You fill this in for Lab 1.
-    std::list<reply_t> *rlist = &(reply_window_[clt_nonce]);
-    std::list<reply_t>::iterator it;
-    rpcs::rpcstate_t ret = NEW;
-
-    // if xid matches and cb_present, DONE! Else INPROGRESS
-    for (it = rlist->begin(); it != rlist->end(); it++) {
-        if ((*it).xid == xid) {
-            if ((*it).cb_present) {
-                *b = (*it).buf;
-                *sz = (*it).sz;
-                return DONE;
-            } else
-                return INPROGRESS;
-        }
-    }
-
-    // if xid is too old, FORGOTTEN
-    if (rlist->size() > 0 && xid < rlist->front().xid) {
-        return FORGOTTEN;
-    }
-
-    // insert new one
-    reply_t reply(xid);
-    reply.cb_present = false;
-    for (it = rlist->begin(); it != rlist->end(); it++) {
-        if ((*it).xid > xid) {
-            rlist->insert(it, reply);
-            break;
-        }
-    }
-    if (it == rlist->end())
-        rlist->push_back(reply);
-
-    // delete old ones
-    for (it = rlist->begin(); it != rlist->end(); it++) {
-        if ((*it).xid >= xid_rep)
-            break;
-    }
-    rlist->erase(rlist->begin(), it);
-
-    return ret;
+    // Your lab3 code goes here.
+    return NEW;
 }
 
 // rpcs::dispatch calls add_reply when it is sending a reply to an RPC,
@@ -716,15 +676,7 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz)
 {
     ScopedLock rwl(&reply_window_m_);
 
-    std::list<reply_t> *rlist = &(reply_window_[clt_nonce]);
-    std::list<reply_t>::iterator it;
-    for (it = rlist->begin(); it != rlist->end(); it++) {
-        if ((*it).xid == xid) {
-            (*it).sz = sz;
-            (*it).buf = b;
-            (*it).cb_present = true;
-        }
-    }
+    // Your lab3 code goes here.
 }
 
 void

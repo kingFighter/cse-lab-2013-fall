@@ -1,4 +1,4 @@
-LAB=2
+LAB=3
 SOL=0
 RPC=./rpc
 LAB1GE=$(shell expr $(LAB) \>\= 1)
@@ -37,7 +37,7 @@ CXX = g++
 lab:  lab$(LAB)
 lab1: lab1_tester
 lab2: yfs_client 
-lab3: yfs_client extent_server lock_server test-lab-3-b test-lab-3-c
+lab3: rpc/rpctest lock_server lock_tester lock_demo yfs_client extent_server test-lab-3-a test-lab-3-b
 lab4: yfs_client extent_server lock_server lock_tester test-lab-3-b\
 	 test-lab-3-c
 lab5: yfs_client extent_server lock_server test-lab-3-b test-lab-3-c
@@ -102,7 +102,7 @@ ifeq ($(LAB4GE),1)
 endif
 yfs_client : $(patsubst %.cc,%.o,$(yfs_client)) rpc/librpc.a
 
-extent_server=extent_server.cc extent_smain.cc
+extent_server=extent_server.cc extent_smain.cc inode_manager.cc
 extent_server : $(patsubst %.cc,%.o,$(extent_server)) rpc/librpc.a
 
 test-lab-3-b=test-lab-3-b.c
@@ -136,5 +136,5 @@ handin_file=lab$(LAB).tgz
 labdir=$(shell basename $(PWD))
 handin: 
 	@bash -c "cd ../; tar -X <(tr ' ' '\n' < <(echo '$(handin_ignore)')) -czvf $(handin_file) $(labdir); mv $(handin_file) $(labdir); cd $(labdir)"
-	@echo Please modify lab2.tgz to lab1_[your student id].tgz and upload it to ftp://ytliu.cc:public@public.sjtu.edu.cn/upload/	
+	@echo Please modify lab3.tgz to lab3_[your student id].tgz and upload it to ftp://ytliu.cc:public@public.sjtu.edu.cn/upload/	
 	@echo Thanks!
