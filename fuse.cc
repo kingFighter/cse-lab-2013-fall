@@ -243,8 +243,21 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
      * note: you should use yfs->create to create file or directory;
      * you alse need to fill the parameter e in.
      */
-
-    return yfs_client::NOENT;
+    yfs_client::inum parent_inum = parent, ino_out;
+    yfs_client::status ret, ret1;
+    struct stat st;
+    if ((ret = yfs->create(parent_inum, name, mode, ino_out)) == yfs_client::OK) {
+      e->ino = ino_out;
+      ret1= getattr(ino_out, st);
+      if (ret1 != yfs_client::OK)
+	return ret1;
+      e->attr = st;
+      return yfs_client::OK;
+    }
+    else if (ret == yfs_client::EXIST)
+      return yfs_client::EXIST;
+    else
+      return yfs_client::NOENT;
 }
 
 void
