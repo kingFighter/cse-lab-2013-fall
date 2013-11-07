@@ -243,7 +243,11 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * your lab2 code goes here.
      * note: read using ec->get().
      */
-
+    ec->get(ino, data);		// it always returns OK
+    if (off <= data.size())
+      data = data.substr(off, size);
+    else 
+      data = "";
     return r;
 }
 
