@@ -141,13 +141,15 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
     bool found;
     yfs_client::status ret;
     std::string content, inum_str;
+    const std::string split1 = ":", split2 = " ";
+    
     if ((ret = lookup(parent, name, found, ino_out)) == NOENT) {
       ec->create(extent_protocol::T_FILE , ino_out);
       ec->get(parent, content);
       char c[100];
       sprintf(c, "%lld", ino_out);
       inum_str = c;
-      inum_str = ":" + inum_str + ";";
+      inum_str = split1 + inum_str + split2;
       content += name + inum_str;
       ec->put(parent, content);
       return OK;
@@ -172,6 +174,7 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
      */
     // directory format *name:inum;*
     std::string content, inum_str;
+    const std::string split1 = ":", split2 = " ";
     if (ec->get(parent, content) != extent_protocol::OK) { // according to code , it always returns OK;
       printf("yfs_client.cc:lookup error get, return not OK\n");
       return RPCERR;		// ??what to return?
@@ -181,8 +184,8 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
       printf("yfs_client.cc:lookup file not exist.\n");
       return NOENT;		// what is NOENT??
     }
-    position1 = content.find(":", position);
-    position2 = content.find(";", position);
+    position1 = content.find(split1, position);
+    position2 = content.find(split2, position);
 
     inum_str = content.substr(position1 + 1, position2);
     sscanf(inum_str.c_str(), "%lld", &ino_out); // or ostringstream?
@@ -199,7 +202,21 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
      * note: you should parse the dirctory content using your defined format,
      * and push the dirents to the list.
      */
-
+    std::string content, split1 = ":", split2 = " ";
+    
+    ec->get(dir, content);
+    while ( !content.empty()) {
+      std::string inum_str;
+      yfs_client::dirent di;
+      std::string::size_type position1 = content.find(split1), position2 = content.find(split2);
+      di.name = content.substr(0, position1);
+      inum_str = content.substr(position1, position2);
+      content = content.substr(position2);
+      inum ino;
+      sscanf(inum_str.c_str(), "%lld", &ino); // or ostringstream?
+      di.inum = ino;
+      list.push_back(di);
+    }
     return r;
 }
 
