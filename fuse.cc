@@ -132,10 +132,16 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
          * create a struct stat, fill it in using getattr, 
          * and reply back using fuse_reply_attr.
          */
-#if 0
+	yfs_client::inum ino_t =  ino;
+	yfs_client::status ret;
+
+	if ((ret = yfs->setattr(ino_t, attr->st_size)) == yfs_client::OK) {
+	    getattr(ino_t, st);
+#if 1
         // Change the above line to "#if 1", and your code goes here
         // Note: fill st using getattr before fuse_reply_attr
         fuse_reply_attr(req, &st, 0);
+	  }
 #else
     fuse_reply_err(req, ENOSYS);
 #endif
