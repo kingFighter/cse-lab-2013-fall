@@ -276,6 +276,7 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
       std::string tmp(data);
       tmp = tmp.substr(0, size);
       content.replace(off, size, tmp);
+      bytes_written = size;
     }
     ec->put(ino, content);
     return r;

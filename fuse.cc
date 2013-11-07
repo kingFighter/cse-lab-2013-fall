@@ -172,14 +172,19 @@ fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
      * note: you should use yfs->read to read the buffer of size;
      * and reply using fuse_reply_buf. 
      */
-#if 0
-    std::string buf;
+  yfs_client::status ret;
+  std::string buf;
+  
+  if ((ret = yfs->read(ino, size, off, buf)) == yfs_client::OK) {
+#if 1
     // Change the above "#if 0" to "#if 1", and your code goes here
     fuse_reply_buf(req, buf.data(), buf.size());
 #else
     fuse_reply_err(req, ENOSYS);
 #endif
-
+    } else {
+      fuse_reply_err(req, ENOSYS);
+    }
 
 }
 
