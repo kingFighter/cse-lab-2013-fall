@@ -229,12 +229,12 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
   struct inode *ino = get_inode(inum);
   if (ino == NULL) return;
 
-  uint32_t block_num = CEIL(ino->size, BLOCK_SIZE);
+  int block_num = CEIL(ino->size, BLOCK_SIZE);
   *buf_out = (char *)malloc(sizeof(char) * block_num * BLOCK_SIZE);
   *size = ino->size;
-  uint32_t i = 0;
+  int i = 0;
 
-  uint32_t limit = MIN(block_num, NDIRECT);
+  int limit = MIN(block_num, NDIRECT);
   uint32_t offset = 0;
   for (; i < limit; i++) {
     bm->read_block(ino->blocks[i], *buf_out + offset);
@@ -269,15 +269,15 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
   if (ino == NULL) return;
 
   int offset = 0;
-  uint32_t original_block = CEIL(ino->size, BLOCK_SIZE);
-  uint32_t block_num = CEIL(size, BLOCK_SIZE);
-  if (block_num > MAXFILE) {
+  int original_block = CEIL(ino->size, BLOCK_SIZE);
+  int block_num = CEIL(size, BLOCK_SIZE);
+  if (block_num > (int)MAXFILE) {
     printf("\tim: error! file is too large 1\n");
     return; //panic or exit?
   }
 
-  uint32_t limit;
-  uint32_t i;
+  int limit;
+  int i;
   blockid_t *indirect_blocks = NULL;
   // alloc/free blocks as needed
   if (original_block < block_num) {
