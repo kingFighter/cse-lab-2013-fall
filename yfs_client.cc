@@ -124,7 +124,20 @@ yfs_client::setattr(inum ino, size_t size)
      * note: get the content of inode ino, and modify its content
      * according to the size (<, =, or >) content length.
      */
-
+    std::string content;
+    extent_protocol::attr a;
+    extent_protocol::status ret;
+    if ((ret = ec->getattr(ino, a)) != extent_protocol::OK) {
+      printf("error getting attr, return not OK\n");
+      return ret;
+    }
+    ec->get(ino, content); 	// it always returns OK
+    if (a.size < size) {
+      for (uint32_t i = a.size; i < size; i++)
+	content[i] = '\0';
+    } else if (a.size > size) 
+      content = content.substr(0, size);
+    ec->put(ino, content);
     return r;
 }
 
