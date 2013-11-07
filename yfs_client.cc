@@ -138,7 +138,25 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
      * note: lookup is what you need to check if file exist;
      * after create file or dir, you must remember to modify the parent infomation.
      */
-
+    bool found;
+    yfs_client::status ret;
+    std::string content, inum_str;
+    if ((ret = lookup(parent, name, found, ino_out)) == NOENT) {
+      ec->create(extent_protocol::T_FILE , ino_out);
+      ec->get(parent, content);
+      char c[100];
+      sprintf(c, "%lld", ino_out);
+      inum_str = c;
+      inum_str = ":" + inum_str + ";";
+      content += name + inum_str;
+      ec->put(parent, content);
+      return OK;
+    } else if (ret == OK)
+      return EXIST;
+    else 
+      return ret;
+      
+    
     return r;
 }
 
@@ -154,7 +172,7 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
      */
     // directory format *name:inum;*
     std::string content, inum_str;
-    if (ec->get(parent, content) != extent_protocol::OK) {
+    if (ec->get(parent, content) != extent_protocol::OK) { // according to code , it always returns OK;
       printf("yfs_client.cc:lookup error get, return not OK\n");
       return RPCERR;		// ??what to return?
     }
