@@ -209,12 +209,19 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
      * from off to ino;
      * and reply the length of bytes_written using fuse_reply_write.
      */
-#if 0
+  size_t bytes_written;
+  yfs_client::status ret;
+  if ((ret = yfs->write(ino, size, off, buf, bytes_written)) == yfs_client::OK){
+    size = bytes_written;
+#if 1
     // Change the above line to "#if 1", and your code goes here
     fuse_reply_write(req, size);
 #else
     fuse_reply_err(req, ENOSYS);
 #endif
+  } else  {
+    fuse_reply_err(req, ENOSYS);
+  }
 }
 
 //
