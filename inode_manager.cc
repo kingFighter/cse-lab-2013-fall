@@ -228,7 +228,10 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
    */
   struct inode *ino = get_inode(inum);
   if (ino == NULL) return;
-
+  time_t  atime;
+  time(&atime);
+  ino->atime = atime;
+  ino->ctime = atime;
   int block_num = CEIL(ino->size, BLOCK_SIZE);
   *buf_out = (char *)malloc(sizeof(char) * block_num * BLOCK_SIZE);
   *size = ino->size;
@@ -240,7 +243,8 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
     bm->read_block(ino->blocks[i], *buf_out + offset);
     offset += BLOCK_SIZE;
   }
-
+  
+  put_inode(inum, ino);
   if (block_num <= NDIRECT) {
     delete ino;
     return;
@@ -325,12 +329,17 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
   }
 
   ino->size = size;
-  put_inode(inum, ino);
   limit = MIN(block_num, NDIRECT);
   for (i = 0; i < limit; i++) {
     bm->write_block(ino->blocks[i], buf + offset);
     offset += BLOCK_SIZE;
   }
+
+  time_t  mtime;
+  time(&mtime);
+  ino->mtime = mtime;
+  ino->ctime = mtime;
+  put_inode(inum, ino);
 
   if (block_num <= NDIRECT) {
     delete ino;

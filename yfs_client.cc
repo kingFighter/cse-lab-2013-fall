@@ -260,15 +260,6 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
      */
 
     std::string content(data);
-    extent_protocol::attr a;
-    extent_protocol::status ret;
-    if ((ret = ec->getattr(ino, a)) != extent_protocol::OK) {
-        printf("error getting attr\n");
-	return ret;
-    }
-    time_t  mtime;
-    time(&mtime);
-    a.mtime = mtime;
     if (off > content.size()) {
       content += std::string(size - content.size(), '\0');
       bytes_written = size - content.size();
