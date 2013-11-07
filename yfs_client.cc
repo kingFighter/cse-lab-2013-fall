@@ -189,6 +189,7 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
 
     inum_str = content.substr(position1 + 1, position2);
     sscanf(inum_str.c_str(), "%lld", &ino_out); // or ostringstream?
+    found = true;
     return r;
 }
 
@@ -210,8 +211,8 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
       yfs_client::dirent di;
       std::string::size_type position1 = content.find(split1), position2 = content.find(split2);
       di.name = content.substr(0, position1);
-      inum_str = content.substr(position1, position2);
-      content = content.substr(position2);
+      inum_str = content.substr(position1 + 1, position2 - position1);
+      content = content.substr(position2 + 1);
       inum ino;
       sscanf(inum_str.c_str(), "%lld", &ino); // or ostringstream?
       di.inum = ino;
