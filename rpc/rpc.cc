@@ -662,7 +662,7 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 {
     ScopedLock rwl(&reply_window_m_);
 
-    // Your lab3 code goes here.
+    // Your lab3 code goes here
     return NEW;
 }
 
@@ -676,7 +676,7 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz)
 {
     ScopedLock rwl(&reply_window_m_);
 
-    // Your lab3 code goes here.
+    // Your lab3 code goes here
 }
 
 void
