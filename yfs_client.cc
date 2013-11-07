@@ -263,15 +263,17 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
      * when off > length of original file, fill the holes with '\0'.
      */
 
-    std::string content(data);
+    std::string content;
+    ec->get(ino, content);
+    std::string tmp(data);
     if (off > content.size()) {
-      content += std::string(size - content.size(), '\0');
-      bytes_written = size - content.size();
+      bytes_written = off + size; // bytes_written
+      content += std::string(off - content.size(), '\0');
+      content += tmp.substr(0, size);
     } else {
-      std::string tmp(data);
+      bytes_written = size;
       tmp = tmp.substr(0, size);
       content.replace(off, size, tmp);
-      bytes_written = size;
     }
     ec->put(ino, content);
     return r;
