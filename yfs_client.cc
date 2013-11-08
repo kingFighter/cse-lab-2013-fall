@@ -133,10 +133,10 @@ yfs_client::setattr(inum ino, size_t size)
     }
     ec->get(ino, content); 	// it always returns OK
     if (a.size < size) {
-      for (uint32_t i = a.size; i < size; i++)
-	content[i] = '\0';
-    } else if (a.size > size) 
+      content += std::string(size - a.size, '\0');
+    } else if (a.size > size) {
       content = content.substr(0, size);
+    }
     ec->put(ino, content);
     return r;
 }
@@ -155,7 +155,8 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out, ex
     yfs_client::status ret;
     std::string content, inum_str;
     const std::string split1 = ":", split2 = " ";
-    
+
+    // the file is not found
     if ((ret = lookup(parent, name, found, ino_out)) == NOENT) {
       ec->create(type , ino_out);
       ec->get(parent, content);
@@ -166,11 +167,10 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out, ex
       content += name + inum_str;
       ec->put(parent, content);
       return OK;
-    } else if (ret == OK)
+    } else if (ret == OK) 	// the file is found
       return EXIST;
     else 
       return ret;
-      
     
     return r;
 }
@@ -196,7 +196,7 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
     std::string tmp(name);
     if (position == content.npos || content[tmp.size() + position] != ':') {
       printf("yfs_client.cc:lookup file not exist.\n");
-      return NOENT;		// what is NOENT??
+      return NOENT;
     }
     position1 = content.find(split1, position);
     position2 = content.find(split2, position);
@@ -268,7 +268,7 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
     ec->get(ino, content);
     std::string tmp(data);
     if (off > content.size()) {
-      bytes_written = off + size; // bytes_written
+      bytes_written = off  - content.size() + size; // bytes_written
       content += std::string(off - content.size(), '\0');
       content += tmp.substr(0, size);
     } else {

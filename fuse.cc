@@ -261,21 +261,19 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
      * note: you should use yfs->create to create file or directory;
      * you alse need to fill the parameter e in.
      */
-    yfs_client::inum parent_inum = parent, ino_out;
+    yfs_client::inum ino_out;
     yfs_client::status ret, ret1;
     struct stat st;
-    if ((ret = yfs->create(parent_inum, name, mode, ino_out, type)) == yfs_client::OK) {
+    if ((ret = yfs->create(parent, name, mode, ino_out, type)) == yfs_client::OK) {
       e->ino = ino_out;
       ret1= getattr(ino_out, st);
       if (ret1 != yfs_client::OK)
 	return ret1;
       e->attr = st;
       return yfs_client::OK;
+    } else {
+      return ret;
     }
-    else if (ret == yfs_client::EXIST)
-      return yfs_client::EXIST;
-    else
-      return yfs_client::NOENT;
 }
 
 void
@@ -331,10 +329,10 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
      * note: you should use yfs->lookup;
      * remember to return e using fuse_reply_entry.
      */
-    yfs_client::inum parent_inum = parent, ino_out;
+    yfs_client::inum ino_out;
     struct stat st;
     yfs_client::status ret;
-    yfs->lookup(parent_inum, name, found, ino_out); // Need determine return value?
+    yfs->lookup(parent, name, found, ino_out); // Need determine return value?
     if (found) {
       ret = getattr(ino_out, st);
       if (ret != yfs_client::OK) {
@@ -347,7 +345,6 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
     }
     else
       fuse_reply_err(req, ENOENT);
-
 }
 
 
@@ -463,7 +460,7 @@ fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
     fuse_reply_err(req, ENOSYS);
 #endif
     } else if (ret == yfs_client::EXIST){
-      fuse_reply_err(req, ret);
+      fuse_reply_err(req, EEXIST);
     } else {
       fuse_reply_err(req, ENOSYS);
     }
