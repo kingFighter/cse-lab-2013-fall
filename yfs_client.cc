@@ -142,7 +142,7 @@ yfs_client::setattr(inum ino, size_t size)
 }
 
 int
-yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
+yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out, extent_protocol::types type)
 {
     int r = OK;
 
@@ -157,7 +157,7 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
     const std::string split1 = ":", split2 = " ";
     
     if ((ret = lookup(parent, name, found, ino_out)) == NOENT) {
-      ec->create(extent_protocol::T_FILE , ino_out);
+      ec->create(type , ino_out);
       ec->get(parent, content);
       char c[100];
       sprintf(c, "%lld", ino_out);

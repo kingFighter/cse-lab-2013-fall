@@ -249,7 +249,7 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
 //
 yfs_client::status
 fuseserver_createhelper(fuse_ino_t parent, const char *name,
-        mode_t mode, struct fuse_entry_param *e)
+			mode_t mode, struct fuse_entry_param *e, extent_protocol::types type = extent_protocol::T_FILE)
 {
     // In yfs, timeouts are always set to 0.0, and generations are always set to 0
     e->attr_timeout = 0.0;
@@ -264,7 +264,7 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
     yfs_client::inum parent_inum = parent, ino_out;
     yfs_client::status ret, ret1;
     struct stat st;
-    if ((ret = yfs->create(parent_inum, name, mode, ino_out)) == yfs_client::OK) {
+    if ((ret = yfs->create(parent_inum, name, mode, ino_out, type)) == yfs_client::OK) {
       e->ino = ino_out;
       ret1= getattr(ino_out, st);
       if (ret1 != yfs_client::OK)
@@ -454,12 +454,19 @@ fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
      * note: you can use fuseserver_createhelper;
      * remember to return e using fuse_reply_entry.
      */
-#if 0
+    yfs_client::status ret;
+    if ((ret = fuseserver_createhelper(parent, name, mode, &e, extent_protocol::T_DIR)) == yfs_client::OK) {
+#if 1
     // Change the above line to "#if 1", and your code goes here
     fuse_reply_entry(req, &e);
 #else
     fuse_reply_err(req, ENOSYS);
 #endif
+    } else if (ret == yfs_client::EXIST){
+      fuse_reply_err(req, ret);
+    } else {
+      fuse_reply_err(req, ENOSYS);
+    }
 
 }
 
