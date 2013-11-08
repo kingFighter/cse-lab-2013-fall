@@ -402,6 +402,13 @@ inode_manager::remove_file(uint32_t inum)
     delete [] indirect_blocks;
     indirect_blocks = NULL;
   }
+  time_t  mtime;
+  time(&mtime);
+  ino->mtime = mtime;
+  ino->ctime = mtime;
+  ino->size = 0;
+  ino->type = 0;
+  put_inode(inum, ino);
   free_inode(inum);
   delete ino;
 }

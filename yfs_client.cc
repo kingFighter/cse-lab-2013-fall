@@ -193,7 +193,8 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
       return RPCERR;		// ??what to return?
     }
     std::string::size_type position = content.find(name), position1, position2;
-    if (position == content.npos) {
+    std::string tmp(name);
+    if (position == content.npos || content[tmp.size() + position] != ':') {
       printf("yfs_client.cc:lookup file not exist.\n");
       return NOENT;		// what is NOENT??
     }
@@ -288,7 +289,34 @@ int yfs_client::unlink(inum parent,const char *name)
      * note: you should remove the file using ec->remove,
      * and update the parent directory content.
      */
+    extent_protocol::attr a;
+    inum ino_out;
 
+    std::string content, inum_str;
+    const std::string split1 = ":", split2 = " ";
+    if (ec->get(parent, content) != extent_protocol::OK) { // according to code , it always returns OK;
+      printf("yfs_client.cc:lookup error get, return not OK\n");
+      return RPCERR;		// ??what to return?
+    }
+    std::string::size_type position = content.find(name), position1, position2;
+    std::string tmp(name);
+    if (position == content.npos || content[tmp.size() + position] != ':') {
+      printf("yfs_client.cc:lookup file not exist.\n");
+      return ENOENT;		// what is ENOENT??
+    }
+    position1 = content.find(split1, position);
+    position2 = content.find(split2, position);
+
+    inum_str = content.substr(position1 + 1, position2);
+    sscanf(inum_str.c_str(), "%lld", &ino_out); // or ostringstream?
+
+    ec->getattr(ino_out, a);
+    if (a.type == extent_protocol::T_DIR)
+      return ENOSYS;		// what does return value mean?
+    
+    content.erase(position, position2 - position + 1);
+    ec->remove(ino_out);
+    ec->put(parent, content);
     return r;
 }
 
