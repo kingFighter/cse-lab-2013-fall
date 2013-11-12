@@ -22,7 +22,7 @@ char d1[512], d2[512];
 extern int errno;
 
 char big[20001];
-char huge[65536*2+1];
+char huge[65536];
 
 void
 create1(const char *d, const char *f, const char *in)
@@ -488,17 +488,17 @@ main(int argc, char *argv[])
     exit(1);
   }
   if(pid == 0){
-    createn(d2, "xx", 20, false);
+    createn(d2, "xx", 10, false);
     exit(0);
   }
-  createn(d1, "yy", 20, false);
-  sleep(10);
+  createn(d1, "yy", 10, false);
+  sleep(4);
   reap(pid);
-  dircheck(d1, 40);
-  checkn(d1, "xx", 20);
-  checkn(d2, "yy", 20);
-  unlinkn(d1, "xx", 20);
-  unlinkn(d1, "yy", 20);
+  dircheck(d1, 20);
+  checkn(d1, "xx", 10);
+  checkn(d2, "yy", 10);
+  unlinkn(d1, "xx", 10);
+  unlinkn(d1, "yy", 10);
   printf("OK\n");
 
   printf("Concurrent creates of the same file: ");
@@ -508,36 +508,36 @@ main(int argc, char *argv[])
     exit(1);
   }
   if(pid == 0){
-    createn(d2, "zz", 20, true);
+    createn(d2, "zz", 10, true);
     exit(0);
   }
-  createn(d1, "zz", 20, true);
+  createn(d1, "zz", 10, true);
   sleep(4);
-  dircheck(d1, 20);
+  dircheck(d1, 10);
   reap(pid);
-  checkn(d1, "zz", 20);
-  checkn(d2, "zz", 20);
-  unlinkn(d1, "zz", 20);
+  checkn(d1, "zz", 10);
+  checkn(d2, "zz", 10);
+  unlinkn(d1, "zz", 10);
   printf("OK\n");
 
   printf("Concurrent create/delete: ");
-  createn(d1, "x1", 20, false);
-  createn(d2, "x2", 20, false);
+  createn(d1, "x1", 5, false);
+  createn(d2, "x2", 5, false);
   pid = fork();
   if(pid < 0){
     perror("test-lab-3-a: fork");
     exit(1);
   }
   if(pid == 0){
-    unlinkn(d2, "x1", 20);
-    createn(d1, "x3", 20, false);
+    unlinkn(d2, "x1", 5);
+    createn(d1, "x3", 5, false);
     exit(0);
   }
-  createn(d1, "x4", 20, false);
+  createn(d1, "x4", 5, false);
   reap(pid);
-  unlinkn(d2, "x2", 20);
-  unlinkn(d2, "x4", 20);
-  unlinkn(d2, "x3", 20);
+  unlinkn(d2, "x2", 5);
+  unlinkn(d2, "x4", 5);
+  unlinkn(d2, "x3", 5);
   dircheck(d1, 0);
   printf("OK\n");
 
@@ -548,15 +548,15 @@ main(int argc, char *argv[])
     exit(1);
   }
   if(pid == 0){
-    createn(d1, "zz", 20, true);
+    createn(d1, "zz", 10, true);
     exit(0);
   }
-  createn(d1, "zz", 20, true);
+  createn(d1, "zz", 10, true);
   sleep(2);
-  dircheck(d1, 20);
+  dircheck(d1, 10);
   reap(pid);
-  checkn(d1, "zz", 20);
-  unlinkn(d1, "zz", 20);
+  checkn(d1, "zz", 10);
+  unlinkn(d1, "zz", 10);
   printf("OK\n");
 
   printf("Concurrent writes to different parts of same file: ");
@@ -567,15 +567,15 @@ main(int argc, char *argv[])
     exit(1);
   }
   if(pid == 0){
-    write1(d2, "www", 65536, 64, '2');
+    write1(d2, "www", 10000, 64, '2');
     exit(0);
   }
   write1(d1, "www", 0, 64, '1');
   reap(pid);
   checkread(d1, "www", 0, 64, '1');
   checkread(d2, "www", 0, 64, '1');
-  checkread(d1, "www", 65536, 64, '2');
-  checkread(d2, "www", 65536, 64, '2');
+  checkread(d1, "www", 10000, 64, '2');
+  checkread(d2, "www", 10000, 64, '2');
   printf("OK\n");
 
   printf("test-lab-3-a: Passed all tests.\n");
