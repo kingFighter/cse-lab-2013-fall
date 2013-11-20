@@ -10,10 +10,11 @@
 #include "rpc.h"
 
 class lock_server {
-
+ public:
+  enum lock_status {FREE, LOCKED};
  protected:
   int nacquire;
-
+  std::map<lock_protocol::lockid_t, lock_status> lock_st;
  public:
   lock_server();
   ~lock_server() {};
