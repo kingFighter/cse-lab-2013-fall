@@ -10,3 +10,5 @@ lock_demo
 extent_server
 rpc/librpc.a
 rpc/rpctest
+*.log
+core
