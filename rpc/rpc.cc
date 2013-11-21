@@ -729,6 +729,23 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz)
     ScopedLock rwl(&reply_window_m_);
 
     // Your lab3 code goes here
+    if (reply_window_.count(clt_nonce) == 0)
+      return;
+    else {
+      std::list<reply_t> lrt;
+      lrt = reply_window_[clt_nonce];
+      std::list<reply_t>::iterator it;
+      for (it = lrt.begin(); it != lrt.end();)
+	{
+	  if (it->xid == xid)
+	    {
+	      memcpy(it->buf, b, sz);
+	      it->sz = sz;
+	      it->cb_present = DONE;
+	      break;
+	    }
+	}
+    }
 }
 
 void
