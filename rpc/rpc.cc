@@ -663,7 +663,59 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
     ScopedLock rwl(&reply_window_m_);
 
     // Your lab3 code goes here
-    return NEW;
+    std::list<reply_t> lrt;
+    rpcstate_t rst;
+    if (reply_window_.count(clt_nonce) == 0)
+      {
+	// not sure below
+	reply_t rt(xid);
+	lrt.push_back(rt);
+	reply_window_.insert(std::make_pair(clt_nonce, lrt));
+	rst = NEW;
+      }
+    else
+      {
+	lrt = reply_window_[clt_nonce];
+	std::list<reply_t>::iterator it, it1 = lrt.end();
+	bool found = false;
+	if (xid >= xid_min) {
+	  for (it = lrt.begin(); it != lrt.end();) {
+	    if (it->xid == xid) {
+	      found = true;
+	      it1 = it;
+	      break;
+	    }
+	  }
+	}
+	
+	xid_min = xid_rep;
+	for (it = lrt.begin(); it != lrt.end();)
+	  {
+	    if (it->xid <= xid_rep) {
+	      delete it->buf;
+	      it = lrt.erase(it);
+	    }
+	    else
+	      it++;
+	  }
+
+	if (!found) {
+	  if (xid < xid_min)
+	    rst = FORGOTTEN;
+	  else
+	    rst = NEW;
+	}
+	else {
+	  if (!(it1->cb_present))
+	    rst = INPROGRESS;
+	  else {
+	    memcpy(*b, it1->buf, it1->sz);
+	    *sz = it1->sz;
+	    rst = DONE;
+	  }
+	}
+      }
+    return rst;
 }
 
 // rpcs::dispatch calls add_reply when it is sending a reply to an RPC,

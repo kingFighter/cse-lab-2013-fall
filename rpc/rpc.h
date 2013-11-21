@@ -293,7 +293,7 @@ class rpcs : public chanmgr {
 
 	int port_;
 	unsigned int nonce_;
-
+	unsigned int xid_min;
 	// provide at most once semantics by maintaining a window of replies
 	// per client that that client hasn't acknowledged receiving yet.
         // indexed by client nonce.
