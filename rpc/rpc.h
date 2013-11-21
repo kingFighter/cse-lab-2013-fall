@@ -293,12 +293,12 @@ class rpcs : public chanmgr {
 
 	int port_;
 	unsigned int nonce_;
-	unsigned int xid_min;
+
 	// provide at most once semantics by maintaining a window of replies
 	// per client that that client hasn't acknowledged receiving yet.
         // indexed by client nonce.
 	std::map<unsigned int, std::list<reply_t> > reply_window_;
-
+	std::map<unsigned int, unsigned int> rw_received_max_xid;
 	void free_reply_window(void);
 	void add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz);
 
