@@ -662,8 +662,6 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 {
     ScopedLock rwl(&reply_window_m_);
     
-    std::cout << "==start: checkduplicate and update.==\n";
-    std::cout << "==clt_nonce " << clt_nonce << " xid " << xid << " xid_rep " << xid_rep << "==" << std::endl;
     // Your lab3 code goes here
     std::list<reply_t> lrt;
     rpcstate_t rst;
@@ -722,7 +720,6 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	}
       }
     reply_window_[clt_nonce] = lrt;
-    std::cout << "==end: checkduplicate and update.==\n";
     return rst;
 }
 
@@ -735,39 +732,27 @@ void
 rpcs::add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz)
 {
     ScopedLock rwl(&reply_window_m_);
-    std::cout << "==start: add_reply.==\n";
 
     // Your lab3 code goes here
-    if (reply_window_.count(clt_nonce) == 0) {
-      std::cout << "==end: add_reply.==\n";
+    if (reply_window_.count(clt_nonce) == 0) 
       return;
-    }
     else {
-      std::cout << "rpc.cc: add_reply else.\n";
       std::list<reply_t> lrt;
       lrt = reply_window_[clt_nonce];
       std::list<reply_t>::iterator it;
-      std::cout << "rpc.cc: add_reply before for loop.\n";
       for (it = lrt.begin(); it != lrt.end(); it++)
 	{
-	  std::cout << "rpc.cc: add_reply enter for loop.\n";
 	  if (it->xid == xid)
 	    {
-	      std::cout << "rpc.cc: add_reply  for loop if.\n";
 	      it->buf = (char *)malloc(sizeof(char) * sz);
 	      memcpy(it->buf, b, sz);
-	      std::cout << "rpc.cc: add_reply  for loop if 2.\n";
 	      it->sz = sz;
-	      std::cout << "rpc.cc: add_reply  for loop if 3.\n";
 	      it->cb_present = DONE;
-	      std::cout << "rpc.cc: add_reply  for loop if 4.\n";
 	      break;
 	    }
-	  std::cout << "==rpc.cc: for loop.\n==" << std::endl;
 	}
       reply_window_[clt_nonce] = lrt;
     }
-    std::cout << "==end: add_reply.==\n";
 }
 
 void

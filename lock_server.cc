@@ -27,21 +27,19 @@ lock_protocol::status
 lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
-  printf("==acquire request from clt %d==\n", clt);
+  printf("acquire request from clt %d\n", clt);
 
   pthread_mutex_lock(&ar_mutex);
   if (lock_st.count(lid) <= 0) {
     lock_status ls = LOCKED;
     lock_st.insert(std::make_pair(lid,ls));
   } else {
-    while(lock_st[lid] == LOCKED) {
-      std::cout << "==lock_server: acquire while.==\n";
+    while(lock_st[lid] == LOCKED) 
       pthread_cond_wait(&ar_threshold_cv, &ar_mutex);
-    }
+
     lock_st[lid] = LOCKED;
   }
   pthread_mutex_unlock(&ar_mutex);
-  std::cout << "==end:lock_server acquire.==\n";
   return ret;
 }
 
@@ -49,7 +47,7 @@ lock_protocol::status
 lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
-  printf("==release request from clt %d.==\n", clt);
+  printf("release request from clt %d.\n", clt);
   pthread_mutex_lock(&ar_mutex);
   if (lock_st.count(lid) <= 0)
     ret = lock_protocol::NOENT;
@@ -58,6 +56,5 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
     pthread_cond_signal(&ar_threshold_cv);//pthread_cond_broadcast(&ar_threshold_cv);
   }
   pthread_mutex_unlock(&ar_mutex);
-  std::cout << "==end:lock_server release.==\n";
   return ret;
 }
