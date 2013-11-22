@@ -262,7 +262,7 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
 
     std::string content;
     ec->get(ino, content);
-    std::string tmp(data);
+    std::string tmp(data, size);
     if (off > content.size()) {
       bytes_written = off  - content.size() + size; // bytes_written
       content += std::string(off - content.size(), '\0');
