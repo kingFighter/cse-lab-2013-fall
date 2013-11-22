@@ -151,7 +151,7 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out, ex
     yfs_client::status ret;
     std::string content, inum_str;
     const std::string split1 = ":", split2 = " ";
-
+    lc->acquire(parent);
     // the file is not found
     if ((ret = lookup(parent, name, found, ino_out)) == NOENT) {
       ec->create(type , ino_out);
@@ -162,12 +162,17 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out, ex
       inum_str = split1 + inum_str + split2;
       content += name + inum_str;
       ec->put(parent, content);
+      lc->release(parent);
       return OK;
-    } else if (ret == OK) 	// the file is found
+    } else if (ret == OK) { 	// the file is found
+      lc->release(parent);
       return EXIST;
-    else 
+    }
+    else {
+      lc->release(parent);
       return ret;
-    
+    }
+    lc->release(parent);
     return r;
 }
 
@@ -240,11 +245,13 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * your lab2 code goes here.
      * note: read using ec->get().
      */
+    lc->acquire(ino);
     ec->get(ino, data);		// it always returns OK
     if (off <= data.size())
       data = data.substr(off, size);
     else 
       data = "";
+    lc->release(ino);
     return r;
 }
 
@@ -259,7 +266,7 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
      * note: write using ec->put().
      * when off > length of original file, fill the holes with '\0'.
      */
-
+    lc->acquire(ino);
     std::string content;
     ec->get(ino, content);
     std::string tmp(data, size);
@@ -273,6 +280,7 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
       content.replace(off, size, tmp);
     }
     ec->put(ino, content);
+    lc->release(ino);
     return r;
 }
 
@@ -290,14 +298,17 @@ int yfs_client::unlink(inum parent,const char *name)
 
     std::string content, inum_str;
     const std::string split1 = ":", split2 = " ";
+    lc->acquire(parent);
     if (ec->get(parent, content) != extent_protocol::OK) { // according to code , it always returns OK;
       printf("yfs_client.cc:lookup error get, return not OK\n");
+      lc->release(parent);
       return RPCERR;		// ??what to return?
     }
     std::string::size_type position = content.find(name), position1, position2;
     std::string tmp(name);
     if (position == content.npos || content[tmp.size() + position] != ':') {
       printf("yfs_client.cc:lookup file not exist.\n");
+      lc->release(parent);
       return ENOENT;		// what is ENOENT??
     }
     position1 = content.find(split1, position);
@@ -307,12 +318,15 @@ int yfs_client::unlink(inum parent,const char *name)
     sscanf(inum_str.c_str(), "%lld", &ino_out); // or ostringstream?
 
     ec->getattr(ino_out, a);
-    if (a.type == extent_protocol::T_DIR)
+    if (a.type == extent_protocol::T_DIR) {
+      lc->release(parent);
       return ENOSYS;		// what does return value mean?
+    }
     
     content.erase(position, position2 - position + 1);
     ec->remove(ino_out);
     ec->put(parent, content);
+    lc->release(parent);
     return r;
 }
 
