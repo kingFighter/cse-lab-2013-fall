@@ -661,9 +661,66 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
                                 unsigned int xid_rep, char **b, int *sz)
 {
     ScopedLock rwl(&reply_window_m_);
-
+    
     // Your lab3 code goes here
-    return NEW;
+    std::list<reply_t> lrt;
+    rpcstate_t rst;
+    if (reply_window_.count(clt_nonce) == 0)
+      {
+	reply_t rt(xid);
+	lrt.push_back(rt);
+	rst = NEW;
+      }
+    else
+      {
+	lrt = reply_window_[clt_nonce];
+	std::list<reply_t>::iterator it, it1 = lrt.end();
+	bool found = false;
+	unsigned int received_max_xid = rw_received_max_xid[clt_nonce];
+	for (it = lrt.begin(); it != lrt.end(); it++) {
+	  if (it->xid == xid) {
+	    found = true;
+	    it1 = it;
+	      break;
+	  }
+	}
+
+	
+	if (xid_rep > received_max_xid) 
+	    rw_received_max_xid[clt_nonce] = xid_rep;
+
+	for (it = lrt.begin(); it != lrt.end();)
+	  {
+	    if (it->xid <= xid_rep) {
+	      delete it->buf;
+	      it = lrt.erase(it);
+	    }
+	    else
+	      it++;
+	  }
+
+	if (!found) {
+	  if (xid <= received_max_xid)
+	    rst = FORGOTTEN;
+	  else {
+	    reply_t rt(xid);
+	    lrt.push_back(rt);
+	    rst = NEW;
+	  }
+	}
+	else {
+	  if (!(it1->cb_present))
+	    rst = INPROGRESS;
+	  else {
+	    *b = (char *)malloc(sizeof(char) * it1->sz);
+	    memcpy(*b, it1->buf, it1->sz);
+	    *sz = it1->sz;
+	    rst = DONE;
+	  }
+	}
+      }
+    reply_window_[clt_nonce] = lrt;
+    return rst;
 }
 
 // rpcs::dispatch calls add_reply when it is sending a reply to an RPC,
@@ -677,6 +734,25 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz)
     ScopedLock rwl(&reply_window_m_);
 
     // Your lab3 code goes here
+    if (reply_window_.count(clt_nonce) == 0) 
+      return;
+    else {
+      std::list<reply_t> lrt;
+      lrt = reply_window_[clt_nonce];
+      std::list<reply_t>::iterator it;
+      for (it = lrt.begin(); it != lrt.end(); it++)
+	{
+	  if (it->xid == xid)
+	    {
+	      it->buf = (char *)malloc(sizeof(char) * sz);
+	      memcpy(it->buf, b, sz);
+	      it->sz = sz;
+	      it->cb_present = DONE;
+	      break;
+	    }
+	}
+      reply_window_[clt_nonce] = lrt;
+    }
 }
 
 void

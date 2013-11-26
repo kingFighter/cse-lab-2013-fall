@@ -1,3 +1,14 @@
 *.o
 *.d
 lab1_tester
+test-lab-3-b
+test-lab-3-a
+yfs_client
+lock_tester
+lock_server
+lock_demo
+extent_server
+rpc/librpc.a
+rpc/rpctest
+*.log
+core
