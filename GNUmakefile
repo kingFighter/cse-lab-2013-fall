@@ -1,4 +1,4 @@
-LAB=4
+LAB=5
 SOL=0
 RPC=./rpc
 LAB1GE=$(shell expr $(LAB) \>\= 1)
@@ -39,7 +39,7 @@ lab1: lab1_tester
 lab2: yfs_client 
 lab3: rpc/rpctest lock_server lock_tester lock_demo yfs_client extent_server test-lab-3-a test-lab-3-b
 lab4: rpc/rpctest yfs_client extent_server lock_server lock_tester lock_demo test-lab-3-a test-lab-3-b
-lab5: yfs_client extent_server lock_server test-lab-3-b test-lab-3-c
+lab5: rpc/rpctest yfs_client extent_server lock_server lock_tester lock_demo test-lab-3-a test-lab-3-b
 lab6: lock_server rsm_tester
 lab7: lock_tester lock_server rsm_tester
 
@@ -135,5 +135,5 @@ handin_file=lab$(LAB).tgz
 labdir=$(shell basename $(PWD))
 handin: 
 	@bash -c "cd ../; tar -X <(tr ' ' '\n' < <(echo '$(handin_ignore)')) -czvf $(handin_file) $(labdir); mv $(handin_file) $(labdir); cd $(labdir)"
-	@echo Please modify lab4.tgz to lab4_[your student id].tgz and upload it to ftp://ytliu.cc:public@public.sjtu.edu.cn/upload/lab4	
+	@echo Please modify lab5.tgz to lab5_[your student id].tgz and upload it to ftp://ytliu.cc:public@public.sjtu.edu.cn/upload/lab5
 	@echo Thanks!
