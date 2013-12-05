@@ -39,11 +39,27 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
   case LOCKED:
       ((it->second)).status = LOCKED_WAIT;
       (it->second).ocids.insert(id);
-      ret = lock_protocol::OK;	// ??
+      it->second.next_cid = id;
+      ret = lock_protocol::RETRY;	
       isRevoke = true;
     break;
   case LOCKED_WAIT:
-    (it->second).ocids.insert(id);
+    std::set<std::string>::iterator sit = it->second.ocids.find(it->second.next_cid);
+    if (sit != it->second.ocids.end()) {
+      it->second.cid = it->second.next_cid;
+      it->second.ocids.erase(sit);
+      if (it->second.ocids.empty()) {
+	it->second.status = LOCKED;
+	it->second.next_cid = "";
+      } else {
+	it->second.next_cid = *(it->second.ocids.begin());
+	isRevoke = true;
+      }
+      ret = lock_protocol::OK;
+    } else {
+      (it->second).ocids.insert(id);
+      ret = lock_protocol::RETRY;
+    }
     break;
   }
   if (isRevoke) {
@@ -68,6 +84,44 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
          int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
+  pthread_mutex_lock(&ar_cache_mutex);  
+  std::map<lock_protocol::lockid_t, lock_cache_status>::iterator it = lock_cst.find(lid);
+  bool isRetry = false;
+  if (it == lock_cst.end()) {
+    tprintf("ERROR in lock_server_cache release.\n");
+  }
+  else {
+    switch((it->second).status) {
+    case FREE:
+      tprintf("ERROR: lock_sersver_cache release(FREE).\n");
+      break;
+    case LOCKED:
+      (it->second).status = FREE;
+      (it->second).cid = "";
+      if (!(it->second).ocids.empty())
+	tprintf("ERROR: lock_server_cache release(LOCKED).\n");
+      break;
+    case LOCKED_WAIT:
+      isRetry = true;
+      it->second.cid = "";
+      break;
+    }
+  }
+
+  if (isRetry) {
+    handle h(it->second.next_cid);
+    rpcc * cl = h.safebind();
+    if (cl) {
+      pthread_mutex_unlock(&ar_cache_mutex);  
+      int rs = cl->call(rlock_protocol::retry, lid, r);
+      pthread_mutex_lock(&ar_cache_mutex);  
+      if (rs != rlock_protocol::OK) 
+	tprintf("ERROR: lock_server_cache release.\n");
+    } else {
+      tprintf("lock_server_cache release cannot safe bind");
+    }
+  }
+  pthread_mutex_unlock(&ar_cache_mutex);  
   return ret;
 }
 

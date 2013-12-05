@@ -20,6 +20,7 @@ class lock_server_cache {
     Status status;
     std::string cid; 		/* owner client id */
     std::set<std::string> ocids; /* other clients waiting for locks */
+    std::string next_cid;
   };
   std::map<lock_protocol::lockid_t, lock_cache_status> lock_cst;
  public:
