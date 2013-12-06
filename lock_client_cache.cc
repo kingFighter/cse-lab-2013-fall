@@ -10,6 +10,7 @@
 
 
 int lock_client_cache::last_port = 0;
+pthread_mutex_t ar_cache_mutex_client;
 
 lock_client_cache::lock_client_cache(std::string xdst, 
 				     class lock_release_user *_lu)
@@ -33,6 +34,57 @@ lock_protocol::status
 lock_client_cache::acquire(lock_protocol::lockid_t lid)
 {
   int ret = lock_protocol::OK;
+  pthread_mutex_lock(&ar_cache_mutex_client);
+  std::map<lock_protocol::lockid_t, lock_cache_status>::iterator it = lock_cst.find(lid);
+  if (it == lock_cst.end()) {
+    lock_cache_status lcs;
+    lcs.status = NONE;
+    lcs.revoke = false;
+    lcs.retry = false;
+    pthread_cond_init(&lcs.ar_threshold_cv_wait, NULL);
+    pthread_cond_init(&lcs.ar_threshold_cv_retry, NULL);
+    lock_cst.insert(std::make_pair<lock_protocol::lockid_t, lock_cache_status>(lid, lcs));
+  }
+  it = lock_cst.find(lid);
+  bool loop = true;
+  bool isAcquire = false;
+  while (loop) {
+    switch(it->second.status) {
+    case NONE:
+      it->second.status = ACQUIRING;
+      isAcquire = true;
+      loop = false;
+      break;
+    case FREE:
+      it->second.status = LOCKED;
+      loop = false;
+      break;
+    case ACQUIRING:
+    case LOCKED:
+    case RELEASING:
+      while (it->second.status == LOCKED || it->second.status == ACQUIRING 
+	     || it->second.status == RELEASING) 
+	pthread_cond_wait(&it->second.ar_threshold_cv_wait, &ar_cache_mutex_client);
+    break;
+    }
+  }
+  
+  if (isAcquire) {
+    while (!(it->second.retry)) {
+      pthread_mutex_unlock(&ar_cache_mutex_client);
+      ret = cl->call(lock_protocol::acquire, lid, id, id);
+      pthread_mutex_lock(&ar_cache_mutex_client);
+      if (ret == lock_protocol::OK) {
+	it->second.status = LOCKED;
+	break;
+      } else if (ret == lock_protocol::RETRY) {
+	while(!it->second.retry) 
+	  pthread_cond_wait(&it->second.ar_threshold_cv_retry, &ar_cache_mutex_client);
+	it->second.retry = false;
+      }
+    }
+  }
+  pthread_mutex_unlock(&ar_cache_mutex_client);
   return lock_protocol::OK;
 }
 

@@ -26,6 +26,16 @@ class lock_client_cache : public lock_client {
   int rlock_port;
   std::string hostname;
   std::string id;
+  enum Status {NONE, FREE, LOCKED, ACQUIRING, RELEASING};
+  class lock_cache_status {
+  public:
+    Status status;
+    pthread_cond_t ar_threshold_cv_wait;
+    pthread_cond_t ar_threshold_cv_retry;
+    bool revoke;
+    bool retry;
+  };
+  std::map<lock_protocol::lockid_t, lock_cache_status> lock_cst;
  public:
   static int last_port;
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
