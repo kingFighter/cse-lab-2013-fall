@@ -20,8 +20,9 @@ lock_server_cache::lock_server_cache():
 int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id, 
                                int &)
 {
-  tprintf("stat request\n");
-  lock_protocol::status ret = lock_protocol::OK;
+  tprintf("lock_server_cache acquire request.\n");
+  std::cout << lid << ' ' << id << std::endl;
+  lock_protocol::status ret = lock_protocol::RETRY;
   pthread_mutex_lock(&ar_cache_mutex);
   bool isRevoke = false;
   std::map<lock_protocol::lockid_t, lock_cache_status>::iterator it = lock_cst.find(lid);
@@ -29,12 +30,19 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
     lock_cache_status lcs;
     lcs.status = FREE;
     lcs.cid = "";
+    lcs.next_cid = "";
+    lock_cst.insert(std::make_pair(lid,lcs));
+    tprintf("lock_server_cache acquire in first if.\n");
+    std::cout << lid << ' ' << id << std::endl;
   }
+  it = lock_cst.find(lid);
   switch((it->second).status) {
   case FREE:
     (it->second).status = LOCKED;
     (it->second).cid = id;
     ret =  lock_protocol::OK;
+    tprintf("lock_server_cache acquire in FREE.\n");
+    std::cout << lid << ' ' << id << std::endl;
     break;
   case LOCKED:
       ((it->second)).status = LOCKED_WAIT;
@@ -42,20 +50,34 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
       it->second.next_cid = id;
       ret = lock_protocol::RETRY;	
       isRevoke = true;
+      tprintf("lock_server_cache acquire in LOCKED.\n");
+      std::cout << lid << ' ' << id << std::endl;
+      std::cout << "Next cid " << id << std::endl;
     break;
   case LOCKED_WAIT:
     std::set<std::string>::iterator sit = it->second.ocids.find(it->second.next_cid);
+    tprintf("lock_server_cache acquire in LOCKED_WAIT.\n");
+    std::cout << lid << ' ' << id << std::endl;
+    std::cout << it->second.next_cid << std::endl;
     if (sit != it->second.ocids.end()) {
-      it->second.cid = it->second.next_cid;
-      it->second.ocids.erase(sit);
-      if (it->second.ocids.empty()) {
-	it->second.status = LOCKED;
-	it->second.next_cid = "";
+      // if (it->second.ocids.count(id)) {
+      if (it->second.next_cid == id) {
+	tprintf("lock_server_cache acquire in ORDERED.\n");
+	std::cout << lid << ' ' << id << std::endl;
+	it->second.cid = it->second.next_cid;
+	it->second.ocids.erase(sit);
+	if (it->second.ocids.empty()) {
+	  it->second.status = LOCKED;
+	  it->second.next_cid = "";
+	} else {
+	  it->second.next_cid = *(it->second.ocids.begin());
+	  isRevoke = true;
+	}
+	ret = lock_protocol::OK;
       } else {
-	it->second.next_cid = *(it->second.ocids.begin());
-	isRevoke = true;
+	(it->second).ocids.insert(id);
+	ret = lock_protocol::RETRY;
       }
-      ret = lock_protocol::OK;
     } else {
       (it->second).ocids.insert(id);
       ret = lock_protocol::RETRY;
@@ -63,6 +85,8 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
     break;
   }
   if (isRevoke) {
+    tprintf("lock_server_cache acquire in isRevoke.\n");
+    std::cout << lid << ' ' << id << std::endl;
     handle holder((it->second).cid);
     rpcc * cl = holder.safebind();
     if (cl) {
@@ -84,6 +108,8 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
          int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
+  tprintf("lock_server_cache release request.\n");
+    std::cout << lid << ' ' << id << std::endl;
   pthread_mutex_lock(&ar_cache_mutex);  
   std::map<lock_protocol::lockid_t, lock_cache_status>::iterator it = lock_cst.find(lid);
   bool isRetry = false;
@@ -96,12 +122,16 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
       tprintf("ERROR: lock_sersver_cache release(FREE).\n");
       break;
     case LOCKED:
+      tprintf("lock_server_cache release LOCKED.\n");
+      std::cout << lid << ' ' << id << std::endl;
       (it->second).status = FREE;
       (it->second).cid = "";
       if (!(it->second).ocids.empty())
 	tprintf("ERROR: lock_server_cache release(LOCKED).\n");
       break;
     case LOCKED_WAIT:
+      tprintf("lock_server_cache release LOCKED_WAIT.\n");
+      std::cout << lid << ' ' << id << std::endl;
       isRetry = true;
       it->second.cid = "";
       break;
@@ -111,6 +141,8 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
   if (isRetry) {
     handle h(it->second.next_cid);
     rpcc * cl = h.safebind();
+    tprintf("lock_server_cache release isRetry.\n");
+    std::cout << lid << ' ' << id << std::endl;
     if (cl) {
       pthread_mutex_unlock(&ar_cache_mutex);  
       int rs = cl->call(rlock_protocol::retry, lid, r);
