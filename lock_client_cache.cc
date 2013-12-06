@@ -91,8 +91,38 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 lock_protocol::status
 lock_client_cache::release(lock_protocol::lockid_t lid)
 {
+  pthread_mutex_lock(&ar_cache_mutex_client);
+  std::map<lock_protocol::lockid_t, lock_cache_status>::iterator it = lock_cst.find(lid);
+  bool isRelease = false;
+  if (it == lock_cst.end()) {
+    tprintf("ERROR: lock_client_cache relesse.\n");
+    return lock_protocol::RETRY;
+  }
+  if (it->second.revoke) {
+    it->second.revoke = false;
+    isRelease = true;
+  } else {
+    switch(it->second.status) {
+    case LOCKED:
+      it->second.status = FREE;
+      pthread_cond_signal(&it->second.ar_threshold_cv_wait);
+      break;
+    case RELEASING:
+      isRelease = true;
+      break;
+    default:
+      tprintf("ERROR: lock_client_cache release default.\n");
+    }
+  }
+  if (isRelease) {
+    pthread_mutex_unlock(&ar_cache_mutex_client);  
+    int ret = cl->call(lock_protocol::release, lid, id, id);
+    pthread_mutex_lock(&ar_cache_mutex_client);  
+    it->second.status = NONE;
+    pthread_cond_broadcast(&it->second.ar_threshold_cv_wait);
+  }
+  pthread_mutex_unlock(&ar_cache_mutex_client);  
   return lock_protocol::OK;
-
 }
 
 rlock_protocol::status
