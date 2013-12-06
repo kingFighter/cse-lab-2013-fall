@@ -72,7 +72,8 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
   if (isAcquire) {
     while (!(it->second.retry)) {
       pthread_mutex_unlock(&ar_cache_mutex_client);
-      ret = cl->call(lock_protocol::acquire, lid, id, id);
+      int r;
+      ret = cl->call(lock_protocol::acquire, lid, id, r);
       pthread_mutex_lock(&ar_cache_mutex_client);
       if (ret == lock_protocol::OK) {
 	it->second.status = LOCKED;
@@ -116,7 +117,8 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
   }
   if (isRelease) {
     pthread_mutex_unlock(&ar_cache_mutex_client);  
-    int ret = cl->call(lock_protocol::release, lid, id, id);
+    int r;
+    int ret = cl->call(lock_protocol::release, lid, id, r);
     pthread_mutex_lock(&ar_cache_mutex_client);  
     it->second.status = NONE;
     pthread_cond_broadcast(&it->second.ar_threshold_cv_wait);
@@ -129,7 +131,33 @@ rlock_protocol::status
 lock_client_cache::revoke_handler(lock_protocol::lockid_t lid, 
                                   int &)
 {
+  pthread_mutex_lock(&ar_cache_mutex_client);    
   int ret = rlock_protocol::OK;
+  std::map<lock_protocol::lockid_t, lock_cache_status>::iterator it = lock_cst.find(lid);
+  bool isRelease = false;
+  switch(it->second.status) {
+  case NONE:
+  case ACQUIRING:
+  case RELEASING:
+    it->second.revoke = true;
+    break;
+  case FREE:
+    it->second.status = RELEASING;
+    isRelease = true;
+    break;
+  case LOCKED:
+    it->second.status = RELEASING;
+    break;
+  }
+  if (isRelease) {
+    pthread_mutex_unlock(&ar_cache_mutex_client);      
+    int r;
+    int ret = cl->call(lock_protocol::release, lid, id, r);
+    pthread_mutex_lock(&ar_cache_mutex_client);  
+    it->second.status = NONE;
+    pthread_cond_broadcast(&it->second.ar_threshold_cv_wait);
+  }
+  pthread_mutex_unlock(&ar_cache_mutex_client);  
   return ret;
 }
 
@@ -137,7 +165,12 @@ rlock_protocol::status
 lock_client_cache::retry_handler(lock_protocol::lockid_t lid, 
                                  int &)
 {
+  pthread_mutex_lock(&ar_cache_mutex_client);  
   int ret = rlock_protocol::OK;
+  std::map<lock_protocol::lockid_t, lock_cache_status>::iterator it = lock_cst.find(lid);
+  pthread_cond_signal(&it->second.ar_threshold_cv_retry);
+  it->second.retry = true;
+  pthread_mutex_unlock(&ar_cache_mutex_client);  
   return ret;
 }
 
