@@ -12,7 +12,7 @@
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
-  lc = new lock_client(lock_dst);
+  lc = new lock_client_cache(lock_dst);
   if (ec->put(1, "") != extent_protocol::OK)
       printf("error init root dir\n"); // XYB: init root dir
 }
@@ -120,12 +120,25 @@ yfs_client::setattr(inum ino, size_t size)
      * note: get the content of inode ino, and modify its content
      * according to the size (<, =, or >) content length.
      */
-
+    std::string content;
+    extent_protocol::attr a;
+    extent_protocol::status ret;
+    if ((ret = ec->getattr(ino, a)) != extent_protocol::OK) {
+      printf("error getting attr, return not OK\n");
+      return ret;
+    }
+    ec->get(ino, content); 	// it always returns OK
+    if (a.size < size) {
+      content += std::string(size - a.size, '\0');
+    } else if (a.size > size) {
+      content = content.substr(0, size);
+    }
+    ec->put(ino, content);
     return r;
 }
 
 int
-yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
+yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out, extent_protocol::types type)
 {
     int r = OK;
 
@@ -134,7 +147,32 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
      * note: lookup is what you need to check if file exist;
      * after create file or dir, you must remember to modify the parent infomation.
      */
-
+    bool found;
+    yfs_client::status ret;
+    std::string content, inum_str;
+    const std::string split1 = ":", split2 = " ";
+    lc->acquire(parent);
+    // the file is not found
+    if ((ret = lookup(parent, name, found, ino_out)) == NOENT) {
+      ec->create(type , ino_out);
+      ec->get(parent, content);
+      char c[100];
+      sprintf(c, "%lld", ino_out);
+      inum_str = c;
+      inum_str = split1 + inum_str + split2;
+      content += name + inum_str;
+      ec->put(parent, content);
+      lc->release(parent);
+      return OK;
+    } else if (ret == OK) { 	// the file is found
+      lc->release(parent);
+      return EXIST;
+    }
+    else {
+      lc->release(parent);
+      return ret;
+    }
+    lc->release(parent);
     return r;
 }
 
@@ -148,7 +186,25 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
      * note: lookup file from parent dir according to name;
      * you should design the format of directory content.
      */
+    // directory format *name:inum;*
+    std::string content, inum_str;
+    const std::string split1 = ":", split2 = " ";
+    if (ec->get(parent, content) != extent_protocol::OK) { // according to code , it always returns OK;
+      printf("yfs_client.cc:lookup error get, return not OK\n");
+      return RPCERR;		// ??what to return?
+    }
+    std::string::size_type position = content.find(name), position1, position2;
+    std::string tmp(name);
+    if (position == content.npos || content[tmp.size() + position] != ':') {
+      printf("yfs_client.cc:lookup file not exist.\n");
+      return NOENT;
+    }
+    position1 = content.find(split1, position);
+    position2 = content.find(split2, position);
 
+    inum_str = content.substr(position1 + 1, position2);
+    sscanf(inum_str.c_str(), "%lld", &ino_out); // or ostringstream?
+    found = true;
     return r;
 }
 
@@ -162,7 +218,21 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
      * note: you should parse the dirctory content using your defined format,
      * and push the dirents to the list.
      */
-
+    std::string content, split1 = ":", split2 = " ";
+    
+    ec->get(dir, content);
+    while ( !content.empty()) {
+      std::string inum_str;
+      yfs_client::dirent di;
+      std::string::size_type position1 = content.find(split1), position2 = content.find(split2);
+      di.name = content.substr(0, position1);
+      inum_str = content.substr(position1 + 1, position2 - position1);
+      content = content.substr(position2 + 1);
+      inum ino;
+      sscanf(inum_str.c_str(), "%lld", &ino); // or ostringstream?
+      di.inum = ino;
+      list.push_back(di);
+    }
     return r;
 }
 
@@ -175,7 +245,13 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * your lab2 code goes here.
      * note: read using ec->get().
      */
-
+    lc->acquire(ino);
+    ec->get(ino, data);		// it always returns OK
+    if (off <= data.size())
+      data = data.substr(off, size);
+    else 
+      data = "";
+    lc->release(ino);
     return r;
 }
 
@@ -190,7 +266,21 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
      * note: write using ec->put().
      * when off > length of original file, fill the holes with '\0'.
      */
-
+    lc->acquire(ino);
+    std::string content;
+    ec->get(ino, content);
+    std::string tmp(data, size);
+    if (off > content.size()) {
+      bytes_written = off  - content.size() + size; // bytes_written
+      content += std::string(off - content.size(), '\0');
+      content += tmp.substr(0, size);
+    } else {
+      bytes_written = size;
+      tmp = tmp.substr(0, size);
+      content.replace(off, size, tmp);
+    }
+    ec->put(ino, content);
+    lc->release(ino);
     return r;
 }
 
@@ -203,7 +293,40 @@ int yfs_client::unlink(inum parent,const char *name)
      * note: you should remove the file using ec->remove,
      * and update the parent directory content.
      */
+    extent_protocol::attr a;
+    inum ino_out;
 
+    std::string content, inum_str;
+    const std::string split1 = ":", split2 = " ";
+    lc->acquire(parent);
+    if (ec->get(parent, content) != extent_protocol::OK) { // according to code , it always returns OK;
+      printf("yfs_client.cc:lookup error get, return not OK\n");
+      lc->release(parent);
+      return RPCERR;		// ??what to return?
+    }
+    std::string::size_type position = content.find(name), position1, position2;
+    std::string tmp(name);
+    if (position == content.npos || content[tmp.size() + position] != ':') {
+      printf("yfs_client.cc:lookup file not exist.\n");
+      lc->release(parent);
+      return ENOENT;		// what is ENOENT??
+    }
+    position1 = content.find(split1, position);
+    position2 = content.find(split2, position);
+
+    inum_str = content.substr(position1 + 1, position2);
+    sscanf(inum_str.c_str(), "%lld", &ino_out); // or ostringstream?
+
+    ec->getattr(ino_out, a);
+    if (a.type == extent_protocol::T_DIR) {
+      lc->release(parent);
+      return ENOSYS;		// what does return value mean?
+    }
+    
+    content.erase(position, position2 - position + 1);
+    ec->remove(ino_out);
+    ec->put(parent, content);
+    lc->release(parent);
     return r;
 }
 
