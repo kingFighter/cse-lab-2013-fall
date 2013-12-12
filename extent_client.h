@@ -10,7 +10,9 @@
 class extent_client {
  private:
   rpcc *cl;
-
+  std::map<extent_protocol::extentid_t, std::string> caches;
+  std::map<extent_protocol::extentid_t, int> caches_st; /* 0: ; 1: dirty */
+  std::map<extent_protocol::extentid_t, extent_protocol::attr> caches_attr;
  public:
   extent_client(std::string dst);
 
