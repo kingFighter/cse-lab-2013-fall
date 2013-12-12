@@ -41,6 +41,7 @@ extent_client::create(uint32_t type, extent_protocol::extentid_t &id)
   extent_protocol::status ret = extent_protocol::OK;
   // Your lab3 code goes here
   ret = cl->call(extent_protocol::create, type, id);
+  caches_attr[id].type = type;
   return ret;
 }
 
@@ -55,7 +56,11 @@ extent_client::get(extent_protocol::extentid_t eid, std::string &buf)
     ret = cl->call(extent_protocol::get,eid, buf);
     caches[eid] = buf;
   }
-    return ret;
+  time_t atime;
+  time(&atime);
+  caches_attr[eid].atime = atime;
+  caches_attr[eid].ctime = atime;
+  return ret;
 }
 
 extent_protocol::status
@@ -69,6 +74,11 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
     caches[eid] = buf;
     caches_st[eid] = 1;
   }
+  caches_attr[eid].size = buf.size();
+  time_t mtime;
+  time(&mtime);
+  caches_attr[eid].mtime = mtime;
+  caches_attr[eid].ctime = mtime;
   // ret = cl->call(extent_protocol::put, eid, buf, nothing);
   return ret;
 }
