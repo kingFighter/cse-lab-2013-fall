@@ -118,6 +118,7 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
   if (isRelease) {
     pthread_mutex_unlock(&ar_cache_mutex_client);  
     int r;
+    lu->dorelease(lid);
     int ret = cl->call(lock_protocol::release, lid, id, r);
     pthread_mutex_lock(&ar_cache_mutex_client);  
     it->second.status = NONE;
@@ -152,6 +153,7 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
   if (isRelease) {
     pthread_mutex_unlock(&ar_cache_mutex_client);      
     int r;
+    lu->dorelease(lid);
     int ret = cl->call(lock_protocol::release, lid, id, r);
     pthread_mutex_lock(&ar_cache_mutex_client);  
     it->second.status = NONE;

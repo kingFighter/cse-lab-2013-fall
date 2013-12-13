@@ -14,6 +14,7 @@
 
 class yfs_client {
   extent_client *ec;
+  lock_release_user *l;
   lock_client_cache *lc;
  public:
 
@@ -52,6 +53,7 @@ class yfs_client {
 
   int setattr(inum, size_t);
   int lookup(inum, const char *, bool &, inum &);
+  int lookup_nolock(inum, const char *, bool &, inum &);
   int create(inum, const char *, mode_t, inum &, extent_protocol::types);
   int readdir(inum, std::list<dirent> &);
   int write(inum, size_t, off_t, const char *, size_t &);

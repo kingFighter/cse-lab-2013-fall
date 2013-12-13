@@ -12,7 +12,8 @@
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
-  lc = new lock_client_cache(lock_dst);
+  l = new lock_release_user_im(ec);
+  lc = new lock_client_cache(lock_dst, l);
   if (ec->put(1, "") != extent_protocol::OK)
       printf("error init root dir\n"); // XYB: init root dir
 }
@@ -39,17 +40,20 @@ bool
 yfs_client::isfile(inum inum)
 {
     extent_protocol::attr a;
-
+    lc->acquire(inum);
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         printf("error getting attr\n");
+	lc->release(inum);
         return false;
     }
 
     if (a.type == extent_protocol::T_FILE) {
         printf("isfile: %lld is a file\n", inum);
+	lc->release(inum);
         return true;
     } 
     printf("isfile: %lld is a dir\n", inum);
+    lc->release(inum);
     return false;
 }
 
@@ -66,6 +70,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
 
     printf("getfile %016llx\n", inum);
     extent_protocol::attr a;
+    lc->acquire(inum);
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         r = IOERR;
         goto release;
@@ -78,6 +83,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
     printf("getfile %016llx -> sz %llu\n", inum, fin.size);
 
 release:
+    lc->release(inum);
     return r;
 }
 
@@ -88,6 +94,7 @@ yfs_client::getdir(inum inum, dirinfo &din)
 
     printf("getdir %016llx\n", inum);
     extent_protocol::attr a;
+    lc->acquire(inum);
     if (ec->getattr(inum, a) != extent_protocol::OK) {
         r = IOERR;
         goto release;
@@ -97,6 +104,7 @@ yfs_client::getdir(inum inum, dirinfo &din)
     din.ctime = a.ctime;
 
 release:
+    lc->release(inum);
     return r;
 }
 
@@ -123,8 +131,11 @@ yfs_client::setattr(inum ino, size_t size)
     std::string content;
     extent_protocol::attr a;
     extent_protocol::status ret;
+    
+    lc->acquire(ino);
     if ((ret = ec->getattr(ino, a)) != extent_protocol::OK) {
       printf("error getting attr, return not OK\n");
+      lc->release(ino);
       return ret;
     }
     ec->get(ino, content); 	// it always returns OK
@@ -134,6 +145,7 @@ yfs_client::setattr(inum ino, size_t size)
       content = content.substr(0, size);
     }
     ec->put(ino, content);
+    lc->release(ino);
     return r;
 }
 
@@ -153,7 +165,7 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out, ex
     const std::string split1 = ":", split2 = " ";
     lc->acquire(parent);
     // the file is not found
-    if ((ret = lookup(parent, name, found, ino_out)) == NOENT) {
+    if ((ret = lookup_nolock(parent, name, found, ino_out)) == NOENT) {
       ec->create(type , ino_out);
       ec->get(parent, content);
       char c[100];
@@ -178,6 +190,42 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out, ex
 
 int
 yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
+{
+    int r = OK;
+
+    /*
+     * your lab2 code goes here.
+     * note: lookup file from parent dir according to name;
+     * you should design the format of directory content.
+     */
+    // directory format *name:inum;*
+    std::string content, inum_str;
+    const std::string split1 = ":", split2 = " ";
+    lc->acquire(parent);
+    if (ec->get(parent, content) != extent_protocol::OK) { // according to code , it always returns OK;
+      printf("yfs_client.cc:lookup error get, return not OK\n");
+      lc->release(parent);
+      return RPCERR;		// ??what to return?
+    }
+    std::string::size_type position = content.find(name), position1, position2;
+    std::string tmp(name);
+    if (position == content.npos || content[tmp.size() + position] != ':') {
+      printf("yfs_client.cc:lookup file not exist.\n");
+      lc->release(parent);
+      return NOENT;
+    }
+    position1 = content.find(split1, position);
+    position2 = content.find(split2, position);
+
+    inum_str = content.substr(position1 + 1, position2);
+    sscanf(inum_str.c_str(), "%lld", &ino_out); // or ostringstream?
+    found = true;
+    lc->release(parent);
+    return r;
+}
+
+int
+yfs_client::lookup_nolock(inum parent, const char *name, bool &found, inum &ino_out)
 {
     int r = OK;
 
@@ -219,7 +267,7 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
      * and push the dirents to the list.
      */
     std::string content, split1 = ":", split2 = " ";
-    
+    lc->acquire(dir);
     ec->get(dir, content);
     while ( !content.empty()) {
       std::string inum_str;
@@ -233,6 +281,7 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
       di.inum = ino;
       list.push_back(di);
     }
+    lc->release(dir);
     return r;
 }
 

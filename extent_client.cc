@@ -70,10 +70,9 @@ extent_client::put(extent_protocol::extentid_t eid, std::string buf)
   // Your lab3 code goes here
   int nothing = 1;
 
-  if (caches[eid].compare(buf)) {
-    caches[eid] = buf;
-    caches_st[eid] = 1;
-  }
+  caches[eid] = buf;
+  caches_st[eid].dirty = 1;
+
   caches_attr[eid].size = buf.size();
   time_t mtime;
   time(&mtime);
@@ -90,10 +89,25 @@ extent_client::remove(extent_protocol::extentid_t eid)
   // Your lab3 code goes here
   int nothing = 1;
   caches.erase(eid);
-  caches_st.erase(eid);
+  // caches_st.erase(eid);
+  caches_st[eid].dirty = 1;
+  caches_st[eid].invalid = 1;
   caches_attr.erase(eid);
   // ret = cl->call(extent_protocol::remove, eid, nothing);
   return ret;
 }
 
+void
+extent_client::flush(extent_protocol::extentid_t eid)
+{
+  extent_protocol::status ret = extent_protocol::OK;
+  int nothing;
+  if (caches_st[eid].invalid == 1) 
+    ret = cl->call(extent_protocol::remove, eid, nothing); 
+  else if (caches_st[eid].dirty == 1)
+    ret = cl->call(extent_protocol::put, eid, caches[eid], nothing);
+  caches.erase(eid);
+  caches_attr.erase(eid);
+  caches_st.erase(eid);
+}
 
